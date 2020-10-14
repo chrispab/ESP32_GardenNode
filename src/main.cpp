@@ -1,316 +1,193 @@
-//#define DEBUG
-#define RELEASE
-
-#include "Arduino.h"
-#include "version.h"
-#include <NewRemoteTransmitter.h>
-#include <RF24.h>
-#include <WiFi.h>
-#include <stdlib.h> // for dtostrf(FLOAT,WIDTH,PRECSISION,BUFFER);
-#include <ESPmDNS.h>
-#include <WiFiUdp.h>
-#include <ArduinoOTA.h>
-#include "MyOTA.h"
-#include "Display.h"
-#include "ZoneController.h"
-#include "secret.h"
-#include "LedFader.h"
-#include "TempSensor.h"
-#include "sendemail.h"
-#include "pins.h"
-
-//time stuff
-#include <NTPClient.h>
-#include <WiFiUdp.h>
-#define NTP_OFFSET 60 * 60     // In seconds, 0 for GMT, 60*60 for BST
-#define NTP_INTERVAL 60 * 1000 // In miliseconds
-#define NTP_ADDRESS "europe.pool.ntp.org"
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, NTP_ADDRESS, NTP_OFFSET, NTP_INTERVAL);
-//NTPClient timeClient(ntpUDP);
-
-#include "MQTTLib.h"
-extern char subscribeTopic[];   // = "433Bridge/cmnd/#";
-extern char publishTempTopic[]; // = "433Bridge/Temperature";
-extern char publishHumiTopic[]; // = "433Bridge/Humidity";
-extern bool MQTTNewData;
-
-
-// forward decs
-void checkConnections(void);
-//void updateDisplayData(void);
-void resetWatchdog(void);
-//boolean processTouchPads(void);
-
-void IRAM_ATTR resetModule();
-
-// DHT22 stuff
-///TempSensor DHT22Sensor;
-
-//MQTT stuff
+#include <Arduino.h>
+// #include <IRremoteESP8266.h>
+#include <assert.h>
+// #include <AsyncElegantOTA.h>
+// #include <AsyncTCP.h>
+// #include <ESPAsyncWebServer.h>
+// #include <IRsend.h>
 #include <PubSubClient.h>
-IPAddress mqttBroker(192, 168, 0, 200);
-WiFiClient WiFiEClient;
-PubSubClient MQTTclient(mqttBroker, 1883, MQTTRxcallback, WiFiEClient);
 
-// 433Mhz settings
-// 282830 addr of 16ch remote
-// param 3 is pulse width, last param is num times control message  is txed
-//#include "My433Transmitter.h"
-//NewRemoteTransmitter transmitter(282830, TX433PIN, 260, 4);
-//My433Transmitter transmitter(282830, TX433PIN, 260, 4);
+// req for ota
+#include <ArduinoOTA.h>
+#include <ESPmDNS.h>
+#include <WiFi.h>
+#include <WiFiUdp.h>
+//
+#include "config.h"
 
-//#include "RF24Lib.h" //// Set up nRF24L01 rf24Radio on SPI bus plus pins 7 & 8
-//RF24 rf24Radio(RF24_CE_PIN, RF24_CS_PIN);
-
-//#include "LightSensor.h"
-//LightSensor myLightSensor(LDR_PIN);
-
-// Global vars
-unsigned long currentMillis = 0;
-unsigned long previousConnCheckMillis = 0;
-unsigned long intervalConnCheckMillis = 63000;
-
-unsigned long intervalTempDisplayMillis = 60000;
-unsigned long previousTempDisplayMillis =
-    millis() - intervalTempDisplayMillis; // trigger on start
-
-// create the display object
-Display myDisplay(U8G2_R0, /* reset=*/U8X8_PIN_NONE, OLED_CLOCK_PIN, OLED_DATA_PIN);
-//ZoneController ZCs[3] = {ZoneController(0, 14, "GRG", "GGG"),
-                        // ZoneController(1, 4, "CNV", "CCC"),
-                        // ZoneController(2, 15, "SHD", "SSS")};
-
-WiFiServer server(80);
-
-// create object
-//SendEmail e("smtp.gmail.com", 465, EMAIL_ADDRESS, APP_PASSWORD,
-//2000, true);
-// set parameters. pin 13, go from 0 to 255 every n milliseconds
-LedFader heartBeatLED(ESP32_ONBOARD_BLUE_LED_PIN, 1, 0, 70, 1000, true);
-LedFader warnLED(RED_LED_PIN, 2, 0, 255, 451, true);
-
-#include <WebSerial.h>
-WebSerial myWebSerial;
-
-//#include "WebSocketLib.h"
-
-//WebSocketsServer webSocket = WebSocketsServer(81);
-
-//#define EMAIL_SUBJECT "ESP32 Bridge - REBOOTED"
-
-//#include "WebSocketLib.h"
-
-//extern void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length);
-
+#include "LedFader.h"
+#include "MQTTLib.h"
 #include "WiFiLib.h"
-//#include "WebPageLib.h"
+// #include "ircodes.h"
 
-#include "SupportLib.h"
-extern boolean processTouchPads(void);
-extern char *getElapsedTimeStr();
-extern void updateDisplayData();
-extern void checkConnections();
-extern displayModes displayMode;
-extern boolean touchedFlag; // = false;
+#define GREEN_LED_PIN GPIO_NUM_12   //
+#define IR_LED_PIN GPIO_NUM_13      //
+#define ONBOARD_LED_PIN GPIO_NUM_2  //
+#define RX_PIN GPIO_NUM_14          //
 
-//#include "TouchPad.h"
-//TouchPad touchPad1 = TouchPad(TOUCH_SENSOR_1);
-//TouchPad touchPad2 = TouchPad(TOUCH_SENSOR_2);
+const uint16_t kIrLed = IR_LED_PIN;  // ESP8266 GPIO pin to use.
+// IRsend irsend(kIrLed);               // Set the GPIO to be used to sending the message.
 
-//! WATCHDOG STUFF
-hw_timer_t *timer = NULL;
+#define HEART_BEAT_TIME 800
+#define BLUE_BEAT_TIME 300
 
-// ! big issue - does not work when no internet connection - resolve
+LedFader heartBeatLED(GREEN_LED_PIN, 1, 0, 255, HEART_BEAT_TIME);
+LedFader blueBeatLED(ONBOARD_LED_PIN, 2, 0, 50, BLUE_BEAT_TIME);
 
-#define myWEBHOOk "https://maker.ifttt.com/trigger/ESP32BridgeBoot/with/key/dF1NEy_aQ5diUyluM3EKcd"
-#include <IFTTTWebhook.h>
-IFTTTWebhook myWebhook(IFTTT_API_KEY, IFTTT_EVENT_NAME);
+// raw codes
+uint16_t rawData[75] = {
+    2004, 988, 1002, 986, 1000, 986, 1000, 492, 498, 986, 502, 490, 1000,
+    490, 502, 984, 502, 490, 1000, 986, 1000, 986, 500, 48852, 2002, 988,
+    1000, 986, 1000, 986, 502, 490, 1000, 984, 504, 490, 1000, 490, 502,
+    986, 500, 490, 502, 490, 502, 490, 1000, 986, 500, 48416, 2002, 988,
+    1000, 988, 998, 984, 1002, 986, 500, 492, 500, 490, 1000, 490, 500,
+    984, 504, 492, 500, 492, 500, 490, 1000, 986, 500};
+// length = 75 ^ above raw array
+uint16_t rawDataLength = 75;
 
+// MQTT stuff
+void callback(char *topic, byte *payload, unsigned int length) {
+    // handle message arrived
+    // format and display the whole MQTT message and payload
+    char fullMQTTmessage[255];  // = "MQTT rxed thisisthetopicforthismesage and
+                                // finally the payload, and a bit extra to make
+                                // sure there is room in the string and even
+                                // more chars";
+    strcpy(fullMQTTmessage, "MQTT Rxed Topic: [");
+    strcat(fullMQTTmessage, topic);
+    strcat(fullMQTTmessage, "], ");
+    // append payload and add \o terminator
+    strcat(fullMQTTmessage, "Payload: [");
+    strncat(fullMQTTmessage, (char *)payload, length);
+    strcat(fullMQTTmessage, "]");
 
-#include "MoistureSensor.h"
-MoistureSensor myMoistureSensor(CSMS_PIN);
+    Serial.println(fullMQTTmessage);
 
-
-void setup()
-{ // Initialize serial monitor port to PC and wait for port to
-#ifdef DEBUG
-    Serial.println(1);
-#endif
-    Serial.begin(115200);
-    //myWebSerial.println("==========running setup==========");
-    //MQTTLibSetup();
-    heartBeatLED.begin();                        // initialize
-    warnLED.begin();                             // initialize
-    pinMode(ESP32_ONBOARD_BLUE_LED_PIN, OUTPUT); // set the LED pin mode
-    // // setup OLED display
-    // displayMode = NORMAL;
-    // displayMode = BIG_TEMP;
-    // //displayMode = MULTI;
-    // myDisplay.begin();
-    // myDisplay.setFont(SYS_FONT);
-    // myDisplay.wipe();
-    // myDisplay.writeLine(1, TITLE_LINE1);
-    // myDisplay.writeLine(2, TITLE_LINE2);
-    // myDisplay.writeLine(3, TITLE_LINE3);
-    // myDisplay.writeLine(4, TITLE_LINE4);
-    // myDisplay.writeLine(5, TITLE_LINE5);
-    // myDisplay.writeLine(6, TITLE_LINE6);
-    // myDisplay.refresh();
-    // delay(1000);
-
-    // myDisplay.wipe();
-    // myDisplay.writeLine(1, "Connecting to Sensor..");
-    // myDisplay.refresh();
-    // DHT22Sensor.setup(DHTPIN, DHT22Sensor.AM2302);
-    // rf24 stuff
-    // myDisplay.writeLine(2, "Connecting to RF24..");
-    // myDisplay.refresh();
-    // connectRF24();
-    // attempt to connect to Wifi network:
-    //myDisplay.writeLine(3, "Connecting to WiFi..");
-    //myDisplay.refresh();
-    connectWiFi();
-    // you're connected now, so print out the status:
-    printWifiStatus();
-    //server.begin();
-    //CR;
-    //myDisplay.writeLine(4, "Connecting to MQTT..");
-    //myDisplay.refresh();
-    connectMQTT();
-    //myDisplay.writeLine(5, "All Connected");
-    //myDisplay.refresh();
-    timeClient.begin();
-    timeClient.update();
-    Serial.println(timeClient.getFormattedTime());
-    delay(200);
-
-    //! watchdog setup
-    timer = timerBegin(0, 80, true); // timer 0, div 80
-    timerAttachInterrupt(timer, &resetModule, true);
-    // n0 secs
-    timerAlarmWrite(timer, 30000000, false); // set time in us
-    timerAlarmEnable(timer);                 // enable interrupt
-    //myDisplay.wipe();
-    //connectWiFi();
-    resetWatchdog();
-    // webSocket.begin();
-    // webSocket.onEvent(webSocketEvent);
-    setupOTA();
-    resetWatchdog();
-
-    //MQTTclient.
-    //myWebhook.trigger("433Bridge BootReboot");
-   // myLightSensor.getLevel();
-}
-
-/**
- * @brief 
- * 
- */
-void loop()
-{
-#ifdef DEBUG
-    Serial.print("1..");
-#endif
-    checkMoistureSensor();
-    //checkLightSensor();
-    //checkPIRSensor();
-    checkConnections(); // and reconnect if reqd
-
-    MQTTclient.loop();    // process any MQTT stuff, returned in callback
-    //processMQTTMessage(); // check flags set above and act on
-    ArduinoOTA.handle();
-    resetWatchdog();
-    heartBeatLED.update(); // initialize
-    //webSocket.loop();
-
-    timeClient.update();
-
-    //broadcastWS();
-    //if new readings taken, op to serial etc
-    // if (DHT22Sensor.publishReadings(MQTTclient, publishTempTopic, publishHumiTopic))
-    // {
-    //     myWebSerial.println("New Sensor Readings-MQTT published");
-    // }
-
-    // webSocket.loop();
-    // broadcastWS();
-    MQTTclient.loop(); // process any MQTT stuff, returned in callback
-    ArduinoOTA.handle();
-
-    // touchedFlag = touchPad1.getState();
-    // (touchPad1.getState()) ? displayMode = MULTI : displayMode = BIG_TEMP;
-
-    // if (touchPad2.getState())
-    // {
-    //     if (millis() % 2000 == 0)
-    //     {
-    //         warnLED.fullOn();
-    //         delay(10);
-    //         warnLED.fullOff();
-    //         //!  MQTTclient.publish("433Bridge/Button1", "1");
+    // if (strcmp(topic, "irbridge/amplifier/video1") == 0) {  // does topic match this text?
+    //     Serial.println("ir send amp source select video1");
+    //     irsend.sendNEC(SELECT_VIDEO1);
+    // } else if (strcmp(topic, "irbridge/amplifier/tuner") == 0) {  // does topic match this text?
+    //     Serial.println("ir send amp source select tuner");
+    //     irsend.sendNEC(SELECT_TUNER);
+    // } else if (strcmp(topic, "irbridge/amplifier/aux") == 0) {  // does topic match this text?
+    //     Serial.println("ir send amp source select AUX");
+    //     irsend.sendNEC(SELECT_AUX);
+    // } else if (strcmp(topic, "irbridge/amplifier/mute") == 0) {  // does topic match this text?
+    //     Serial.println("ir send amp mute");
+    //     irsend.sendNEC(MUTE);
+    // } else if (strcmp(topic, "irbridge/amplifier/volumeup") == 0) {  // does topic match this text?
+    //     Serial.println("ir send amp vol up");
+    //     irsend.sendNEC(VOLUME_UP);
+    // } else if (strcmp(topic, "irbridge/amplifier/volumedown") == 0) {  // does topic match this text?
+    //     Serial.println("ir send amp vol down");
+    //     irsend.sendNEC(VOLUME_DOWN);
+    // } else if (strcmp(topic, "irbridge/amplifier/poweron") == 0) {  // does topic match this text?
+    //     Serial.println("ir send amp power on");
+    //     irsend.sendNEC(POWER_ON);
+    // } else if (strcmp(topic, "irbridge/amplifier/poweroff") == 0) {  // does topic match this text?
+    //     Serial.println("ir send amp power off");
+    //     irsend.sendNEC(POWER_OFF);
+    // } else if (strcmp(topic, "irbridge/amplifier/standby") == 0) {  // does topic match this text?
+    //     if ((payload[1] - 'n') == 0) {                              // found the 'n' in "on" ?
+    //         Serial.println("ir send amp standby on");
+    //         irsend.sendNEC(POWER_ON);
+    //     } else {  // payload must have been "off"
+    //         Serial.println("ir send amp standby off");
+    //         irsend.sendNEC(POWER_OFF);
     //     }
-    //     displayMode = MULTI;
     // }
-    // else
-    // {
-    //     displayMode = BIG_TEMP;
-    // }
-    ArduinoOTA.handle();
-
-    // updateDisplayData();
-    ArduinoOTA.handle();
-
-    // webSocket.loop();
-    // broadcastWS();
-    // processZoneRF24Message(); // process any zone watchdog messages
-    // if (ZCs[0].manageRestarts(transmitter) == true)
-    // {
-    //     myWebhook.trigger("ESP32 Watchdog: Zone 1 power cycled");
-    // }
-    // broadcastWS();
-    // // disbale zone 2 restarts for now
-    // ZCs[1].resetZoneDevice();
-    // if (ZCs[2].manageRestarts(transmitter) == true)
-    // {
-    //     myWebhook.trigger("ESP32 Watchdog: Zone 3 power cycled");
-    // }
-    // broadcastWS();
-    // webSocket.loop();
-
-    ArduinoOTA.handle();
-
-    //WiFiLocalWebPageCtrl();
-    // checkForPageRequest();
-    //webSocket.loop();
-    //broadcastWS();
-}
-
-/**
- * @brief 
- * 
- */
-void IRAM_ATTR resetModule()
-{
-    ets_printf("ESP32 Rebooted by Internal Watchdog\n");
-    //esp_restart_noos();
-    esp_restart();
-}
-
-/**
- * @brief 
- * 
- */
-void resetWatchdog(void)
-{
-    static unsigned long lastResetWatchdogMillis = millis();
-    unsigned long resetWatchdogIntervalMs = 10000;
-
-    if ((millis() - lastResetWatchdogMillis) >= resetWatchdogIntervalMs)
-    {
-        timerWrite(timer, 0); // reset timer (feed watchdog)
-        //myWebSerial.println("Reset Module Watchdog......");
-        lastResetWatchdogMillis = millis();
+    //! possible incoming topics and payload: "irbridge/amplifier/standby"     "on|off"
+    // else if (strcmp(topic, "irbridge/amplifier/code") == 0) {  // raw code
+    //     Serial.print("plain NEC code Tx : ");
+    //     unsigned long actualval;
+    //     actualval = strtoul((char *)payload, NULL, 10);
+    //     Serial.println(actualval);
+    //     irsend.sendNEC(actualval);
     }
+    //     else if (strcmp(topic, "irbridge/amplifier/raw") == 0) {  // raw code
+    //         Serial.print("raw code Tx : ");
+    //         unsigned long actualval;
+    //         actualval = strtoul((char *)payload, NULL, 10);
+    //         Serial.println(actualval);
+    //         irsend.sendRaw(rawData, rawDataLength, 38);  // Send a raw data capture at 38kHz.
+    //     }
+
+
+IPAddress mqttBroker(192, 168, 0, MQTT_LAST_OCTET);
+WiFiClient myWiFiClient;
+PubSubClient MQTTclient(mqttBroker, 1883, callback, myWiFiClient);
+const uint32_t kBaudRate = 115200;
+
+void setup() {
+    Serial.begin(115200);
+    Serial.println("Booting");
+    connectWiFi();
+    printWifiStatus();
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+    Serial.flush();
+
+    delay(5000);
+    connectMQTT();
+
+    // irsend.begin();
+    heartBeatLED.begin();  // initialize
+    blueBeatLED.begin();   // initialize
+    // you're connected now, so print out the status:
+
+    // Serial.begin(kBaudRate, SERIAL_8N1);
+    // while (!Serial)  // Wait for the serial connection to be establised.
+    //   delay(50);
+
+    /* we use mDNS instead of IP of ESP32 directly */
+    // hostname.local
+    ArduinoOTA.setHostname("irbridge");
+
+    ArduinoOTA
+        .onStart([]() {
+            String type;
+            if (ArduinoOTA.getCommand() == U_FLASH)
+                type = "sketch";
+            else  // U_SPIFFS
+                type = "filesystem";
+
+            // NOTE: if updating SPIFFS this would be the place to unmount
+            // SPIFFS using SPIFFS.end()
+            Serial.println("Start updating " + type);
+        })
+        .onEnd([]() { Serial.println("\nEnd"); })
+        .onProgress([](unsigned int progress, unsigned int total) {
+            Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
+        })
+        .onError([](ota_error_t error) {
+            Serial.printf("Error[%u]: ", error);
+            if (error == OTA_AUTH_ERROR)
+                Serial.println("Auth Failed");
+            else if (error == OTA_BEGIN_ERROR)
+                Serial.println("Begin Failed");
+            else if (error == OTA_CONNECT_ERROR)
+                Serial.println("Connect Failed");
+            else if (error == OTA_RECEIVE_ERROR)
+                Serial.println("Receive Failed");
+            else if (error == OTA_END_ERROR)
+                Serial.println("End Failed");
+        });
+
+    ArduinoOTA.begin();
+
+    Serial.println("Ready");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+}
+
+void loop() {
+    // connectWiFi();
+    // maybe checkwifi here
+    connectMQTT();
+    ArduinoOTA.handle();
+
+    heartBeatLED.update();
+    blueBeatLED.update();
+
+    MQTTclient.loop();  // process any MQTT stuff, returned in callback
 }
