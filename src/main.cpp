@@ -34,16 +34,7 @@ const uint16_t kIrLed = IR_LED_PIN;  // ESP8266 GPIO pin to use.
 LedFader heartBeatLED(GREEN_LED_PIN, 1, 0, 255, HEART_BEAT_TIME);
 LedFader blueBeatLED(ONBOARD_LED_PIN, 2, 0, 50, BLUE_BEAT_TIME);
 
-// raw codes
-uint16_t rawData[75] = {
-    2004, 988, 1002, 986, 1000, 986, 1000, 492, 498, 986, 502, 490, 1000,
-    490, 502, 984, 502, 490, 1000, 986, 1000, 986, 500, 48852, 2002, 988,
-    1000, 986, 1000, 986, 502, 490, 1000, 984, 504, 490, 1000, 490, 502,
-    986, 500, 490, 502, 490, 502, 490, 1000, 986, 500, 48416, 2002, 988,
-    1000, 988, 998, 984, 1002, 986, 500, 492, 500, 490, 1000, 490, 500,
-    984, 504, 492, 500, 492, 500, 490, 1000, 986, 500};
-// length = 75 ^ above raw array
-uint16_t rawDataLength = 75;
+
 
 // MQTT stuff
 void callback(char *topic, byte *payload, unsigned int length) {
@@ -119,7 +110,7 @@ PubSubClient MQTTclient(mqttBroker, 1883, callback, myWiFiClient);
 const uint32_t kBaudRate = 115200;
 
 void setup() {
-    Serial.begin(115200);
+    Serial.begin(kBaudRate);
     Serial.println("Booting");
     connectWiFi();
     printWifiStatus();
@@ -141,7 +132,7 @@ void setup() {
 
     /* we use mDNS instead of IP of ESP32 directly */
     // hostname.local
-    ArduinoOTA.setHostname("irbridge");
+    ArduinoOTA.setHostname("gnode1");
 
     ArduinoOTA
         .onStart([]() {
