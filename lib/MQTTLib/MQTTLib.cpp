@@ -61,7 +61,7 @@ void connectMQTT() {
           // myWebSerial.println("connected to MQTT server");
           MQTTclient.publish(LWT_TOPIC, "Online", true);  // ensure send online
           // MQTTclient.publish(publishLWTTopic, "Online");
-          // MQTTclient.subscribe(subscribeTopic);
+          MQTTclient.subscribe(SUBSCRIBE_TOPIC);
           // MQTTclient.subscribe(subscribeTopic2);
         //   MQTTclient.subscribe(subscribeTopic3);
         } else {
