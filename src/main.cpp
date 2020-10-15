@@ -13,12 +13,14 @@
 #include <WiFi.h>
 #include <WiFiUdp.h>
 //
-#include "config.h"
-
 #include "LedFader.h"
 #include "MQTTLib.h"
 #include "WiFiLib.h"
+#include "config.h"
 // #include "ircodes.h"
+#include "MoistureSensor.h"
+#include "pins.h"
+MoistureSensor myMoistureSensor(CSMS_PIN);
 
 #define GREEN_LED_PIN GPIO_NUM_12   //
 #define IR_LED_PIN GPIO_NUM_13      //
@@ -33,8 +35,6 @@ const uint16_t kIrLed = IR_LED_PIN;  // ESP8266 GPIO pin to use.
 
 LedFader heartBeatLED(GREEN_LED_PIN, 1, 0, 255, HEART_BEAT_TIME);
 LedFader blueBeatLED(ONBOARD_LED_PIN, 2, 0, 50, BLUE_BEAT_TIME);
-
-
 
 // MQTT stuff
 void callback(char *topic, byte *payload, unsigned int length) {
@@ -94,15 +94,14 @@ void callback(char *topic, byte *payload, unsigned int length) {
     //     actualval = strtoul((char *)payload, NULL, 10);
     //     Serial.println(actualval);
     //     irsend.sendNEC(actualval);
-    }
-    //     else if (strcmp(topic, "irbridge/amplifier/raw") == 0) {  // raw code
-    //         Serial.print("raw code Tx : ");
-    //         unsigned long actualval;
-    //         actualval = strtoul((char *)payload, NULL, 10);
-    //         Serial.println(actualval);
-    //         irsend.sendRaw(rawData, rawDataLength, 38);  // Send a raw data capture at 38kHz.
-    //     }
-
+}
+//     else if (strcmp(topic, "irbridge/amplifier/raw") == 0) {  // raw code
+//         Serial.print("raw code Tx : ");
+//         unsigned long actualval;
+//         actualval = strtoul((char *)payload, NULL, 10);
+//         Serial.println(actualval);
+//         irsend.sendRaw(rawData, rawDataLength, 38);  // Send a raw data capture at 38kHz.
+//     }
 
 IPAddress mqttBroker(192, 168, 0, MQTT_LAST_OCTET);
 WiFiClient myWiFiClient;
@@ -170,12 +169,19 @@ void setup() {
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
 }
+// char publishTopic[] = "GardenNode1/Moisture/Level";
 
 void loop() {
     // connectWiFi();
     // maybe checkwifi here
     connectMQTT();
     ArduinoOTA.handle();
+    myMoistureSensor.getLevel();
+    if (myMoistureSensor.hasNewLevel()) {
+        Serial.println(myMoistureSensor.getLevel());
+        myMoistureSensor.clearNewLevelFlag();
+        MQTTclient.publish(PUBLISH_TOPIC, myMoistureSensor.getLevelStr());
+    }
 
     heartBeatLED.update();
     blueBeatLED.update();

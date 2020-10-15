@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include "IOBase.h"
 #include "../../src/version.h"
-//#include "version.h"
+#include "config.h"
 
 
 class MoistureSensor : public IOBase
@@ -15,8 +15,8 @@ private:
   bool newLevelFlag;
   u_int currentLevel;
   u_int previousLevel = 500;
-  u_int readIntervalMillis = CMSM_READ_INTERVAL; //min interval between reading sensor in ms
-  u_int lastReadMillis = -CMSM_READ_INTERVAL;
+  u_long readIntervalMillis = CMSM_READ_INTERVAL; //min interval between reading sensor in ms
+  u_long lastReadMillis = -CMSM_READ_INTERVAL;
 
   //hysteresis and state related properties
   //u_int thresholdLevel = 600;
@@ -27,6 +27,7 @@ private:
   //int currentLevel;
   //int lowerHys = targetLevel - lowerLevel;
   //int upperHys = targetLevel + upperLevel;
+  char levelStr[20];
 
 public:
   MoistureSensor(uint8_t pin);
@@ -34,7 +35,7 @@ public:
   u_int clearNewLevelFlag();
   bool hasNewLevel();
   void setThresholdLevel();
-  int getMoistureSensor();
+  char* getLevelStr();
   bool getState();
 };
 

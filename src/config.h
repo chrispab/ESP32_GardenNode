@@ -11,8 +11,8 @@
     #define MQTT_CLIENT_NAME "IRBridgeMQTTClientALT"
     #define LWT_TOPIC "irbridgeALT/LWT"
 #else
-    #define MQTT_CLIENT_NAME "IRBridgeMQTTClient"
-    #define LWT_TOPIC "irbridge/LWT"
+    #define MQTT_CLIENT_NAME "GardenNode1"
+    #define LWT_TOPIC "GardenNode1/LWT"
 #endif
 
 
@@ -26,9 +26,13 @@
 // #define ZONE_WAIT_BEFORE_FLAG_AWAY 100   //in seconds time window to wait before classed as zone gone away
 // #define ZONE_HEARTBEAT_TIMEOUT_MS (1000UL * 420UL)   //max millisces to wait if no ack from pi before power cycling pi
 // #define ZONE_COLD_BOOT_TIME_MS  (1000UL * 180UL)     //estimated time for a zone controller to boot from power cycle reset
+#define CMSM_READ_INTERVAL  1000*5
 
 #define ESP32_WATCHDOG_TIMEOUT_SECS 60
 #define ESP32_WATCHDOG_RESET_INTERVAL_SECS 30
 
 #define MQTT_LAST_OCTET 100
+#define PUBLISH_TOPIC "GardenNode1/Moisture/Level"
+// char publishTopic[] = "GardenNode1/Moisture/Level";
+
 #endif
