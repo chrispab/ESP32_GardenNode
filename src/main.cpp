@@ -44,6 +44,10 @@ void callback(char *topic, byte *payload, unsigned int length) {
                                 // finally the payload, and a bit extra to make
                                 // sure there is room in the string and even
                                 // more chars";
+    // u_int secs;
+    u_int val;
+    char str[20];
+
     strcpy(fullMQTTmessage, "MQTT Rxed Topic: [");
     strcat(fullMQTTmessage, topic);
     strcat(fullMQTTmessage, "], ");
@@ -54,54 +58,23 @@ void callback(char *topic, byte *payload, unsigned int length) {
 
     Serial.println(fullMQTTmessage);
 
-    // if (strcmp(topic, "irbridge/amplifier/video1") == 0) {  // does topic match this text?
-    //     Serial.println("ir send amp source select video1");
-    //     irsend.sendNEC(SELECT_VIDEO1);
-    // } else if (strcmp(topic, "irbridge/amplifier/tuner") == 0) {  // does topic match this text?
-    //     Serial.println("ir send amp source select tuner");
-    //     irsend.sendNEC(SELECT_TUNER);
-    // } else if (strcmp(topic, "irbridge/amplifier/aux") == 0) {  // does topic match this text?
-    //     Serial.println("ir send amp source select AUX");
-    //     irsend.sendNEC(SELECT_AUX);
-    // } else if (strcmp(topic, "irbridge/amplifier/mute") == 0) {  // does topic match this text?
-    //     Serial.println("ir send amp mute");
-    //     irsend.sendNEC(MUTE);
-    // } else if (strcmp(topic, "irbridge/amplifier/volumeup") == 0) {  // does topic match this text?
-    //     Serial.println("ir send amp vol up");
-    //     irsend.sendNEC(VOLUME_UP);
-    // } else if (strcmp(topic, "irbridge/amplifier/volumedown") == 0) {  // does topic match this text?
-    //     Serial.println("ir send amp vol down");
-    //     irsend.sendNEC(VOLUME_DOWN);
-    // } else if (strcmp(topic, "irbridge/amplifier/poweron") == 0) {  // does topic match this text?
-    //     Serial.println("ir send amp power on");
-    //     irsend.sendNEC(POWER_ON);
-    // } else if (strcmp(topic, "irbridge/amplifier/poweroff") == 0) {  // does topic match this text?
-    //     Serial.println("ir send amp power off");
-    //     irsend.sendNEC(POWER_OFF);
-    // } else if (strcmp(topic, "irbridge/amplifier/standby") == 0) {  // does topic match this text?
-    //     if ((payload[1] - 'n') == 0) {                              // found the 'n' in "on" ?
-    //         Serial.println("ir send amp standby on");
-    //         irsend.sendNEC(POWER_ON);
-    //     } else {  // payload must have been "off"
-    //         Serial.println("ir send amp standby off");
-    //         irsend.sendNEC(POWER_OFF);
-    //     }
-    // }
-    //! possible incoming topics and payload: "irbridge/amplifier/standby"     "on|off"
-    // else if (strcmp(topic, "irbridge/amplifier/code") == 0) {  // raw code
-    //     Serial.print("plain NEC code Tx : ");
-    //     unsigned long actualval;
-    //     actualval = strtoul((char *)payload, NULL, 10);
-    //     Serial.println(actualval);
-    //     irsend.sendNEC(actualval);
-}
-//     else if (strcmp(topic, "irbridge/amplifier/raw") == 0) {  // raw code
-//         Serial.print("raw code Tx : ");
-//         unsigned long actualval;
-//         actualval = strtoul((char *)payload, NULL, 10);
-//         Serial.println(actualval);
-//         irsend.sendRaw(rawData, rawDataLength, 38);  // Send a raw data capture at 38kHz.
-//     }
+    if (strcmp(topic, SET_TELEPERIOD_TOPIC) == 0) {  // does topic match this text?
+        Serial.println("---------CMD Rxed to set teleperiod : ");
+
+        //get secs for tele period from payloaad
+        strncpy(str, (char *)payload, length);
+        // secs=10; //default
+        val = atoi(str);
+        if (val == 0) {
+            val = DEFAULT_CMSM_READ_INTERVAL/1000;  //secs
+        }
+        Serial.print("rxed tele secs : ");
+        Serial.println(val);
+        myMoistureSensor.setTelePeriod(val);
+        // Serial.println("CMD Rxed to set teleperiod : ");
+    }
+
+
 
 IPAddress mqttBroker(192, 168, 0, MQTT_LAST_OCTET);
 WiFiClient myWiFiClient;

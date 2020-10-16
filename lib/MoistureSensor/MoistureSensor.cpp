@@ -7,6 +7,7 @@ MoistureSensor::MoistureSensor(uint8_t ADC_Pin) : pin(ADC_Pin) {
     newStateFlag = true;
     newLevelFlag = true;
     pinMode(ADC_Pin, INPUT);
+    // pin = ADC_Pin;
 }
 
 u_int MoistureSensor::getLevel() {
@@ -57,4 +58,9 @@ bool MoistureSensor::getState() {
         }
     }
     return state;
+}
+
+void MoistureSensor::setTelePeriod(u_int secs) {
+    telePeriod = secs;
+    readIntervalMillis = 1000 * secs;
 }

@@ -2,7 +2,6 @@
 //! Pin GPIO usage
 //Note that GPIO_NUM_34 – GPIO_NUM_39 are input mode only
 //refer to  cct diag for extra info
-#define ESP32_ONBOARD_BLUE_LED_PIN GPIO_NUM_2 // RHS_P_4 esp32 devkit on board blue LED
 // #define GREEN_LED_PIN GPIO_NUM_33             //LHS_P_9
 #define DHTPIN GPIO_NUM_25                    // LHS_P_8 
 #define TX433PIN GPIO_NUM_32                  //LHS_P_10
@@ -29,7 +28,3 @@
 #define LDR_PIN GPIO_NUM_15 //was 36 ADC_0 LHS_P_14
 
 #define PIR_PIN GPIO_NUM_1 // RHS_P_13
-
-//#define CSMS_PIN GPIO_NUM_15 // RHS_P_3, capacitive soil moisture sensor pin 
-#define CSMS_PIN GPIO_NUM_36 // LHS_P_14, capacitive soil moisture sensor pin 
-
