@@ -19,11 +19,11 @@
 #include "config.h"
 // #include "ircodes.h"
 #include "MoistureSensor.h"
-#include "pins.h"
+// #include "pins.h"
 MoistureSensor myMoistureSensor(CSMS_PIN);
 
 #define GREEN_LED_PIN GPIO_NUM_12   //
-#define IR_LED_PIN GPIO_NUM_13      //
+// #define IR_LED_PIN GPIO_NUM_13      //
 #define ONBOARD_LED_PIN GPIO_NUM_2  //
 #define RX_PIN GPIO_NUM_14          //
 
@@ -74,7 +74,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
         // Serial.println("CMD Rxed to set teleperiod : ");
     }
 
-
+}
 
 IPAddress mqttBroker(192, 168, 0, MQTT_LAST_OCTET);
 WiFiClient myWiFiClient;

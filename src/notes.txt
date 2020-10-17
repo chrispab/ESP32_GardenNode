@@ -34,3 +34,4 @@ TX and RX (as used for flash) are GPIO1 and GPIO3.
 The data type called gpio_num_t is a C language enumeration with values corresponding to these names. It is recommended to use these values rather than
 attempt to use numeric values.
 */
+// Note: ADC2 pins cannot be used when Wi-Fi is used. 
