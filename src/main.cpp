@@ -27,7 +27,7 @@ MoistureSensor myMoistureSensor(CSMS_PIN);
 #define ONBOARD_LED_PIN GPIO_NUM_2  //
 #define RX_PIN GPIO_NUM_14          //
 
-const uint16_t kIrLed = IR_LED_PIN;  // ESP8266 GPIO pin to use.
+// const uint16_t kIrLed = IR_LED_PIN;  // ESP8266 GPIO pin to use.
 // IRsend irsend(kIrLed);               // Set the GPIO to be used to sending the message.
 
 #define HEART_BEAT_TIME 800
